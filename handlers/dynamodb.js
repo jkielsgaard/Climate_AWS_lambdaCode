@@ -6,7 +6,6 @@ const AWS = require("aws-sdk");
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 
 module.exports = {
-    /// Data received from a IOT unit with climatedata in JSON format
     PutData: function(body, callback) {
         var bodyjson = JSON.parse(body);
         const { unitid, datestamp, climatedata } = bodyjson;
@@ -31,7 +30,6 @@ module.exports = {
         });
     },
     
-    /// Userlogin request without apikey, if user exist it will respone with the users api key in JSON format
     Userlogin: function(body, callback) {
         console.log(body);
         var bodyjson = JSON.parse(body);
@@ -56,29 +54,48 @@ module.exports = {
         });
     },
     
-    /// Change user password, if it succeeds it will respone with "Password changed""
     ChangeUserPassword: function(body, callback) {
         var bodyjson = JSON.parse(body);
-        const { usermailid, newpassword } = bodyjson;
+        const { usermailid, userpassword, newpassword } = bodyjson;
         
-        var params = {
-            Key: {
-                "usermailid": usermailid.toLowerCase()
-            },
-            UpdateExpression: "set userpassword = :newpassword",
+         var params = {
             ExpressionAttributeValues: {
-                ":newpassword" : cjs.crypt(newpassword),
+                ":usermailid": usermailid.toLowerCase(),
+                ":userpassword" : cjs.crypt(userpassword)
             },
+            KeyConditionExpression: "usermailid = :usermailid",
+            ProjectionExpression: "userpassword",
+            FilterExpression: "userpassword = :userpassword",
             TableName: "climateuser"
         };
-        
-        dynamodb.update(params, function(err, data) {
-        if (err) { console.log("Error", err); } 
-        else { callback(null, "Password changed"); }
+    
+        dynamodb.query(params, function(err, data) {
+            if (err) { console.log("Error", err); } 
+            else {  
+                var dbuserpassword;
+                data.Items.forEach(function(item) { dbuserpassword = item.userpassword; });
+                if (cjs.crypt(userpassword) == dbuserpassword) {
+                     var params = {
+                    Key: {
+                        "usermailid": usermailid.toLowerCase()
+                    },
+                    UpdateExpression: "set userpassword = :newpassword",
+                    ExpressionAttributeValues: {
+                        ":newpassword" : cjs.crypt(newpassword),
+                    },
+                    TableName: "climateuser"
+                    };
+                    
+                    dynamodb.update(params, function(err, data) {
+                    if (err) { console.log("Error", err); } 
+                    else { callback(null, "Password changed"); }
+                    });
+                }
+                else { callback(null, "no access"); }
+            }
         });
     },
     
-    /// Change / update unit information, if it succeeds it will respone with "Units updated"
     UpdateUnitNames: function(body, callback) {
         var bodyjson = JSON.parse(body);
         const { usermailid, units } = bodyjson;
@@ -100,7 +117,6 @@ module.exports = {
         });
     },
     
-    /// Get all users privat unitID and names on units and respone in JSON format
     UserUnits: function(body, callback) {
         var bodyjson = JSON.parse(body);
         const { usermailid, userpassword } = bodyjson;
@@ -122,7 +138,6 @@ module.exports = {
         });
     },
     
-    /// Gat dataset from certain time and respone in JSON format
     UnitData: function (queryStringParameters, callback) {
         const { usermailid, unitid, date } = queryStringParameters;
         
